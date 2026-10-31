@@ -1,0 +1,20 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Data and models (large, licensed, or not for redistribution)
+data/*
+!data/README.md
+models/*
+!models/README.md
+
+# Generated reports (we'll decide later which ones to commit)
+reports/*
+!reports/README.md
+
+# Secrets and local files
+.env
+*.log
+.DS_Store
