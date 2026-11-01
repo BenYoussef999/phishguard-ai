@@ -20,17 +20,28 @@ _DIGITS = re.compile(r"\d+")
 _SPACES = re.compile(r"\s+")
 
 
-def clean_text(text) -> str:
-    """Normalize one message. Never raises on None, NaN, empty or odd input."""
+def clean_text_variant(text, email_mode: str = "token") -> str:
+    """Normalize one message. Never raises on None, NaN, empty or odd input.
+
+    email_mode: "token" replaces e-mail addresses with a placeholder word;
+                "drop" deletes them entirely (used in experiments).
+    """
+    if email_mode not in ("token", "drop"):
+        raise ValueError(f"email_mode must be 'token' or 'drop', got {email_mode!r}")
     if text is None or (isinstance(text, float) and text != text):
         return ""
     s = str(text)[:MAX_CHARS]
     s = _URL.sub(" urltoken ", s)
     s = _HTML_TAG.sub(" ", s)
-    s = _EMAIL.sub(" emailtoken ", s)
+    s = _EMAIL.sub(" emailtoken " if email_mode == "token" else " ", s)
     s = s.lower()
     s = _DIGITS.sub(" numtoken ", s)
     return _SPACES.sub(" ", s).strip()
+
+
+def clean_text(text) -> str:
+    """The default normalization used by the baseline model."""
+    return clean_text_variant(text, "token")
 
 
 def combine_text(subject, body) -> str:
