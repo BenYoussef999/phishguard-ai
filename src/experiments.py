@@ -11,7 +11,7 @@ not used here and stays reserved for the final model.
 Usage (from the project root):
     python -m src.experiments                                  # 4 logistic-regression variants
     python -m src.experiments --variants all                   # includes the SVM variants
-    python -m src.experiments --variants baseline svm_baseline
+    python -m src.experiments --variants no_email svm_no_email
     python -m src.experiments --quick                          # small smoke run, saves nothing
 """
 
@@ -40,6 +40,7 @@ VARIANTS = {
     "robust_vocab":        dict(email_mode="token", robust_vocab=True,  model="logreg"),
     "robust_no_email":     dict(email_mode="drop",  robust_vocab=True,  model="logreg"),
     "svm_baseline":        dict(email_mode="token", robust_vocab=False, model="svm"),
+    "svm_no_email":        dict(email_mode="drop",  robust_vocab=False, model="svm"),
     "svm_robust_no_email": dict(email_mode="drop",  robust_vocab=True,  model="svm"),
 }
 DEFAULT_VARIANTS = ["baseline", "no_email", "robust_vocab", "robust_no_email"]

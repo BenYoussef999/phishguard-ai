@@ -98,3 +98,12 @@ def test_summarize_variant_skips_undefined_values():
     assert s["macro_f1"] == pytest.approx(0.8)
     assert s["macro_recall"] == pytest.approx(0.8)
     assert s["macro_fpr"] == pytest.approx(0.1)
+
+
+def test_every_variant_spec_is_valid_and_svm_no_email_exists():
+    for name, spec in VARIANTS.items():
+        assert set(spec) == {"email_mode", "robust_vocab", "model"}, name
+        assert spec["email_mode"] in ("token", "drop")
+        assert spec["model"] in ("logreg", "svm")
+    assert VARIANTS["svm_no_email"] == dict(email_mode="drop", robust_vocab=False,
+                                            model="svm")
