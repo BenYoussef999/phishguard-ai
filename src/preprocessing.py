@@ -14,7 +14,10 @@ import re
 MAX_CHARS = 20_000
 
 _URL = re.compile(r"(?:https?://|ftp://|www\.)\S+", re.IGNORECASE)
-_EMAIL = re.compile(r"\b[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+\b")
+# Bounded repetition (RFC limits: 64-char local part, 63-char labels) keeps matching
+# linear-time on adversarial input such as "a.a.a.a..." (an unbounded version took
+# ~1 second on 20,000 characters).
+_EMAIL = re.compile(r"\b[\w.+\-]{1,64}@[\w\-]{1,63}(?:\.[\w\-]{1,63}){1,10}\b")
 _HTML_TAG = re.compile(r"<[^>\n]{1,200}>")
 _DIGITS = re.compile(r"\d+")
 _SPACES = re.compile(r"\s+")
