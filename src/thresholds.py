@@ -9,6 +9,7 @@ Steps (from the project root):
                                                       #   calibration table + threshold sweep
     python -m src.thresholds --build                  # force re-fitting the 4 folds
     python -m src.thresholds --t-low 0.30 --t-high 0.70   # what a chosen pair would do
+    python -m src.thresholds --pairs 0.20:0.70 0.25:0.75 0.30:0.70   # compare pairs side by side
 
 Labels: 1 = bad (phishing from Nazario, spam elsewhere), 0 = legitimate.
 Bands: score < t_low -> "legit"; t_low <= score < t_high -> "suspicious";
@@ -139,6 +140,41 @@ def band_report(df: pd.DataFrame, t_low: float, t_high: float) -> dict:
             "per_source": pd.DataFrame(per_source)}
 
 
+def parse_pairs(items) -> list:
+    """Turn ["0.2:0.7", ...] into [(0.2, 0.7), ...]; raise ValueError if malformed."""
+    pairs = []
+    for item in items:
+        try:
+            low, high = (float(x) for x in item.split(":"))
+        except ValueError:
+            raise ValueError(f"Bad pair '{item}'. Use the form LOW:HIGH, e.g. 0.3:0.7")
+        assign_bands([0.5], low, high)          # validates ordering and range
+        pairs.append((low, high))
+    return pairs
+
+
+def compare_pairs(df: pd.DataFrame, pairs) -> pd.DataFrame:
+    """One row per (t_low, t_high) with the numbers that matter for the choice."""
+    bad = (df["label"] == 1).to_numpy()
+    legit = ~bad
+    naz = (df["source"] == "nazario").to_numpy()
+    rows = []
+    for t_low, t_high in pairs:
+        bands = assign_bands(df["score"], t_low, t_high)
+        is_legit_band, is_susp, is_bad_band = (bands == "legit", bands == "suspicious",
+                                               bands == "bad")
+        rows.append({
+            "t_low": t_low, "t_high": t_high,
+            "bad_missed": (is_legit_band & bad).sum() / bad.sum(),
+            "nazario_missed": ((is_legit_band & naz).sum() / naz.sum()
+                               if naz.any() else np.nan),
+            "legit_suspicious": (is_susp & legit).sum() / legit.sum(),
+            "legit_hard_alarm": (is_bad_band & legit).sum() / legit.sum(),
+            "all_in_suspicious": float(is_susp.mean()),
+        })
+    return pd.DataFrame(rows)
+
+
 def _print_band_report(rep: dict, t_low: float, t_high: float) -> None:
     h = rep["headline"]
     print(f"\nBANDS for t_low={t_low}, t_high={t_high}")
@@ -162,6 +198,8 @@ def main() -> int:
                         help="Re-fit the 4 folds and overwrite the score cache.")
     parser.add_argument("--t-low", type=float)
     parser.add_argument("--t-high", type=float)
+    parser.add_argument("--pairs", nargs="+", metavar="LOW:HIGH",
+                        help="Compare several threshold pairs, e.g. 0.2:0.7 0.3:0.7")
     args = parser.parse_args()
 
     if (args.t_low is None) != (args.t_high is None):
@@ -170,6 +208,13 @@ def main() -> int:
     if args.t_low is not None:
         try:
             assign_bands([0.5], args.t_low, args.t_high)
+        except ValueError as err:
+            print(f"Error: {err}")
+            return 1
+    pairs = []
+    if args.pairs:
+        try:
+            pairs = parse_pairs(args.pairs)
         except ValueError as err:
             print(f"Error: {err}")
             return 1
@@ -208,11 +253,19 @@ def main() -> int:
     print("false_alarm_rate: share of legitimate emails flagged")
     print(threshold_sweep(scores).round(3).to_string(index=False))
 
+    if pairs:
+        print("\n" + "=" * 70)
+        print("THRESHOLD PAIRS COMPARED (all values are shares)")
+        print("bad_missed: bad emails called legit | nazario_missed: real phishing called legit")
+        print("legit_suspicious / legit_hard_alarm: legitimate emails put in each band")
+        print("all_in_suspicious: share of ALL emails that land in the middle band\n")
+        print(compare_pairs(scores, pairs).round(3).to_string(index=False))
     if args.t_low is not None:
         _print_band_report(band_report(scores, args.t_low, args.t_high),
                            args.t_low, args.t_high)
-    else:
-        print("\nNext: pick two thresholds and rerun with --t-low X --t-high Y")
+    elif not pairs:
+        print("\nNext: compare pairs with --pairs 0.2:0.7 0.3:0.7, or inspect one pair "
+              "with --t-low X --t-high Y")
     return 0
 
 

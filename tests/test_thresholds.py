@@ -6,8 +6,8 @@ import pytest
 
 from src.experiments import VARIANTS
 from src.thresholds import (assign_bands, band_report, calibration_table,
-                            compute_oof_scores, load_scores, save_scores,
-                            threshold_sweep)
+                            compare_pairs, compute_oof_scores, load_scores,
+                            parse_pairs, save_scores, threshold_sweep)
 
 
 def score_df() -> pd.DataFrame:
@@ -92,3 +92,25 @@ def test_oof_scores_cover_every_email_once_and_stay_in_range():
     assert scores.groupby("source").size().to_dict() == df.groupby("source").size().to_dict()
     # bad emails should score higher than legitimate ones on this easy synthetic data
     assert scores[scores["label"] == 1]["score"].mean() > scores[scores["label"] == 0]["score"].mean()
+
+
+def test_parse_pairs_accepts_good_and_rejects_bad_input():
+    assert parse_pairs(["0.3:0.7", "0.2:0.8"]) == [(0.3, 0.7), (0.2, 0.8)]
+    for bad in ["0.3", "a:b", "0.8:0.2", "0.1:1.5", "0.3:0.7:0.9"]:
+        with pytest.raises(ValueError):
+            parse_pairs([bad])
+
+
+def test_compare_pairs_matches_hand_computed_values():
+    # score_df: 5 legit (0.05 0.1 0.15 0.2 0.35), 7 bad (0.65 0.8 0.9 0.95 0.4 | naz 0.3 0.7)
+    out = compare_pairs(score_df(), [(0.3, 0.7), (0.5, 0.5)])
+    first = out.iloc[0]
+    assert first["bad_missed"] == 0.0 and first["nazario_missed"] == 0.0
+    assert first["legit_suspicious"] == pytest.approx(1 / 5)     # only 0.35
+    assert first["legit_hard_alarm"] == 0.0
+    # suspicious = scores in [0.3, 0.7): 0.35, 0.65, 0.4, 0.3 -> 4 of 12
+    assert first["all_in_suspicious"] == pytest.approx(4 / 12)
+    # with t_low == t_high there is no suspicious band
+    assert out.iloc[1]["all_in_suspicious"] == 0.0
+    # bad scoring below 0.5: 0.4 and 0.3 -> 2 of 7
+    assert out.iloc[1]["bad_missed"] == pytest.approx(2 / 7)
